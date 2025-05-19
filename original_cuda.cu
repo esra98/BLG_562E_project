@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #include <cusolverDn.h>
 #include <cublas_v2.h>
-#include <opencv2/opencv.hpp>
+#include <opencv4/opencv2/opencv.hpp>
 #include <iostream>
 #include <chrono>
 #include <cmath>
