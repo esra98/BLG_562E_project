@@ -1,214 +1,153 @@
-#include <iostream>
-#include <opencv4/opencv2/opencv.hpp>
-#include <eigen3/Eigen/Dense>
-#include <cmath>
-#include <algorithm>
 #include <cuda_runtime.h>
+#include <cusolverDn.h>
 #include <cublas_v2.h>
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <chrono>
+#include <cmath>
 
-// CUDA error checking macro
-#define CUDA_CHECK(err) { \
-    if (err != cudaSuccess) { \
-        std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl; \
-        exit(EXIT_FAILURE); \
-    } \
-}
-
-// Function to convert OpenCV image to Eigen::MatrixXd (on GPU)
-void mat_from_image_gpu(const cv::Mat& img, float* d_data) {
-    int rows = img.rows;
-    int cols = img.cols;
-
-    // Flatten the matrix and transfer it to the GPU
-    CUDA_CHECK(cudaMemcpy(d_data, img.data, rows * cols * sizeof(float), cudaMemcpyHostToDevice));
-}
-
-// Function to convert Eigen::MatrixXd back to OpenCV image (from GPU)
-void image_from_mat_gpu(float* d_data, cv::Mat& img) {
-    int rows = img.rows;
-    int cols = img.cols;
-
-    // Transfer data back to CPU and reshape into an image
-    CUDA_CHECK(cudaMemcpy(img.data, d_data, rows * cols * sizeof(float), cudaMemcpyDeviceToHost));
-}
-
-// Shrinkage function on GPU
-__global__ void shrink_kernel(float* d_data, int size, float tau) {
+// CUDA kernel for shrinkage (soft-thresholding)
+__global__ void shrink_kernel(float* mat, float tau, int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        d_data[idx] = copysignf(fmaxf(fabsf(d_data[idx]) - tau, 0.0f), d_data[idx]);
+    if (idx < n) {
+        float x = mat[idx];
+        float mag = fabsf(x) - tau;
+        mat[idx] = (mag > 0 ? copysignf(mag, x) : 0.0f);
     }
 }
 
-void shrink_gpu(float* d_data, int size, float tau) {
-    int threads_per_block = 256;
-    int blocks = (size + threads_per_block - 1) / threads_per_block;
-    shrink_kernel<<<blocks, threads_per_block>>>(d_data, size, tau);
+void shrink_on_gpu(float* d_mat, float tau, int n) {
+    int block = 256;
+    int grid = (n + block - 1) / block;
+    shrink_kernel<<<grid, block>>>(d_mat, tau, n);
     cudaDeviceSynchronize();
 }
 
-// Matrix multiplication using cuBLAS
-void matrix_multiply_cublas(cublasHandle_t handle, float* d_A, float* d_B, float* d_C, int M, int N, int K) {
-    const float alpha = 1.0f;
-    const float beta = 0.0f;
-
-    // A (MxK), B (KxN) => C (MxN)
-    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, &alpha, d_A, M, d_B, K, &beta, d_C, M);
-}
-
-// Singular Value Thresholding using cuSOLVER (placeholder for SVD)
-void svd_threshold_gpu(cublasHandle_t handle, float* d_M, float* d_S, int rows, int cols, float tau) {
-    // This is a placeholder function. Implementing full SVD in CUDA would require using cuSOLVER.
-    // For now, let's just apply shrinkage directly as a proxy for SVD thresholding.
-
-    shrink_gpu(d_M, rows * cols, tau);
-}
-
-// RPCA class (on GPU)
-class R_pca {
-public:
-    Eigen::MatrixXd D;  // Data matrix (image)
-    Eigen::MatrixXd S;  // Sparse component (foreground)
-    Eigen::MatrixXd Y;  // Lagrange multiplier
-    double mu;
-    double mu_inv;
-    double lmbda;
-
-    // Constructor
-    R_pca(const Eigen::MatrixXd& D, double mu = -1, double lmbda = -1) 
-        : D(D), S(D.rows(), D.cols()), Y(D.rows(), D.cols()) {
-
-        // Initialize mu
-        if (mu > 0) {
-            this->mu = mu;
-        } else {
-            this->mu = D.size() / (4 * D.norm());
-        }
-
-        this->mu_inv = 1.0 / this->mu;
-
-        // Initialize lambda
-        if (lmbda > 0) {
-            this->lmbda = lmbda;
-        } else {
-            this->lmbda = 1.0 / std::sqrt(std::max(D.rows(), D.cols()));
-        }
-    }
-
-    // Frobenius norm
-    static double frobenius_norm(const Eigen::MatrixXd& M) {
-        return M.norm();
-    }
-
-    // Fit function for principal component pursuit (on GPU)
-    void fit_gpu(float* d_data, int rows, int cols, double tol = 1E-7, int max_iter = 1000, int iter_print = 100) {
-        int iter = 0;
-        double err = std::numeric_limits<double>::infinity();
-        float *d_L, *d_S, *d_Y;
-        CUDA_CHECK(cudaMalloc(&d_L, rows * cols * sizeof(float)));
-        CUDA_CHECK(cudaMalloc(&d_S, rows * cols * sizeof(float)));
-        CUDA_CHECK(cudaMalloc(&d_Y, rows * cols * sizeof(float)));
-
-        CUDA_CHECK(cudaMemcpy(d_L, d_data, rows * cols * sizeof(float), cudaMemcpyDeviceToDevice));
-
-        // Start RPCA iterations on GPU
-        while (err > tol && iter < max_iter) {
-            // Step 3: SVD Thresholding (with cuSOLVER/cuBLAS)
-            svd_threshold_gpu(nullptr, d_L, d_S, rows, cols, static_cast<float>(mu_inv));
-
-            // Step 4: Shrinkage
-            shrink_gpu(d_S, rows * cols, static_cast<float>(mu_inv * lmbda));
-
-            // Step 5: Update Lagrange multiplier
-            // (This step is omitted here for brevity, but should involve updating Y on the GPU)
-
-            iter++;
-
-            // Print progress
-            if (iter % iter_print == 0 || iter == 1 || err <= tol) {
-                std::cout << "Iteration: " << iter << ", Error: " << err << std::endl;
-            }
-        }
-
-        // Transfer result back to CPU
-        CUDA_CHECK(cudaMemcpy(S.data(), d_S, rows * cols * sizeof(float), cudaMemcpyDeviceToHost));
-
-        // Free GPU memory
-        CUDA_CHECK(cudaFree(d_L));
-        CUDA_CHECK(cudaFree(d_S));
-        CUDA_CHECK(cudaFree(d_Y));
-    }
-
-    // Get the sparse matrix (foreground)
-    Eigen::MatrixXd get_sparse_matrix() {
-        return S;
-    }
-
-    // Get the low-rank matrix (background)
-    Eigen::MatrixXd get_low_rank_matrix() {
-        return D - S;
-    }
-};
-
-// Function to convert OpenCV image to Eigen::MatrixXd
-Eigen::MatrixXd mat_from_image(const cv::Mat& img) {
-    Eigen::MatrixXd mat(img.rows, img.cols);
-    for (int i = 0; i < img.rows; ++i) {
-        for (int j = 0; j < img.cols; ++j) {
-            mat(i, j) = img.at<uchar>(i, j);  // Assuming grayscale image
-        }
-    }
-    return mat;
-}
-
-// Function to convert Eigen::MatrixXd back to OpenCV image
-cv::Mat image_from_mat(const Eigen::MatrixXd& mat) {
-    cv::Mat img(mat.rows(), mat.cols(), CV_8UC1);
-    for (int i = 0; i < mat.rows(); ++i) {
-        for (int j = 0; j < mat.cols(); ++j) {
-            img.at<uchar>(i, j) = static_cast<uchar>(std::min(std::max(mat(i, j), 0.0), 255.0));
-        }
-    }
-    return img;
-}
-
 int main() {
-    // Load an image using OpenCV
+    using namespace std::chrono;
+    std::cout << "Starting cuBLAS/cuSOLVER RPCA demo\n";
+
+    // 1. Load grayscale image
+    auto t_load1 = high_resolution_clock::now();
     cv::Mat img = cv::imread("lenna(1).png", cv::IMREAD_GRAYSCALE);
+    auto t_load2 = high_resolution_clock::now();
     if (img.empty()) {
-        std::cerr << "Error: Could not load image." << std::endl;
+        std::cerr << "Failed to load image.\n";
         return -1;
     }
+    int rows = img.rows, cols = img.cols, size = rows * cols;
 
-    // Convert OpenCV image to Eigen matrix
-    Eigen::MatrixXd D = mat_from_image(img);
+    // 2. Copy image to host float array (column major)
+    auto t_eigen1 = high_resolution_clock::now();
+    std::vector<float> h_D(size);
+    for (int i = 0; i < rows; ++i)
+        for (int j = 0; j < cols; ++j)
+            h_D[j * rows + i] = static_cast<float>(img.at<uchar>(i, j));
+    auto t_eigen2 = high_resolution_clock::now();
 
-    // Initialize RPCA model
-    R_pca rpca(D);
+    // 3. Allocate device memory
+    float *d_D, *d_S, *d_Y, *d_L, *d_tmp;
+    cudaMalloc(&d_D, size * sizeof(float));
+    cudaMalloc(&d_S, size * sizeof(float));
+    cudaMalloc(&d_Y, size * sizeof(float));
+    cudaMalloc(&d_L, size * sizeof(float));
+    cudaMalloc(&d_tmp, size * sizeof(float));
+    cudaMemcpy(d_D, h_D.data(), size * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemset(d_S, 0, size * sizeof(float));
+    cudaMemset(d_Y, 0, size * sizeof(float));
+    cudaMemset(d_L, 0, size * sizeof(float));
 
-    // Convert to GPU memory
-    float* d_data;
-    CUDA_CHECK(cudaMalloc(&d_data, img.rows * img.cols * sizeof(float)));
-    mat_from_image_gpu(img, d_data);
+    // 4. Set parameters
+    float norm = 0.0f;
+    cublasHandle_t cublasH;
+    cublasCreate(&cublasH);
+    cublasSnrm2(cublasH, size, d_D, 1, &norm);
+    float mu = static_cast<float>(size) / (4 * norm);
+    float mu_inv = 1.0f / mu;
+    float lambda = 1.0f / std::sqrt(static_cast<float>(std::max(rows, cols)));
+    float tol = 1E-7f;
+    int max_iter = 1000, iter = 0;
+    float err = INFINITY;
 
-    // Apply RPCA on GPU
-    rpca.fit_gpu(d_data, img.rows, img.cols);
+    // cuSOLVER handle
+    cusolverDnHandle_t cusolverH;
+    cusolverDnCreate(&cusolverH);
 
-    // Get the sparse (foreground) matrix
-    Eigen::MatrixXd S = rpca.get_sparse_matrix();
+    // 5. RPCA iteration (timed)
+    auto t_rpca1 = high_resolution_clock::now();
+    std::vector<float> h_err(size);
 
-    // Convert the sparse matrix back to an image
-    cv::Mat foreground = image_from_mat(S);
+    while (err > tol && iter < max_iter) {
+        // D - S + mu_inv*Y -> d_tmp
+        const float alpha1 = 1.0f, beta1 = 0.0f;
+        cublasScopy(cublasH, size, d_D, 1, d_tmp, 1);
+        const float alpha2 = -1.0f;
+        cublasSaxpy(cublasH, size, &alpha2, d_S, 1, d_tmp, 1);
+        cublasSaxpy(cublasH, size, &mu_inv, d_Y, 1, d_tmp, 1);
 
-    // Show the result
-    cv::imshow("Foreground (Sparse)", foreground);
-    cv::waitKey(0);
+        // SVD and thresholding (on CPU for simplicity in this skeleton)
+        cudaMemcpy(h_D.data(), d_tmp, size * sizeof(float), cudaMemcpyDeviceToHost);
+        cv::Mat tmp_mat(rows, cols, CV_32FC1, h_D.data());
+        cv::Mat U, S, Vt;
+        cv::SVD::compute(tmp_mat, S, U, Vt, cv::SVD::MODIFY_A);
+        cv::Mat S_thr = cv::max(S - mu_inv, 0);
+        cv::Mat Lk = U * cv::Mat::diag(S_thr) * Vt;
+        cudaMemcpy(d_L, Lk.ptr<float>(), size * sizeof(float), cudaMemcpyHostToDevice);
 
-    // Save the result
-    cv::imwrite("foreground.png", foreground);
+        // D - L + mu_inv*Y -> d_tmp
+        cublasScopy(cublasH, size, d_D, 1, d_tmp, 1);
+        cublasSaxpy(cublasH, size, &alpha2, d_L, 1, d_tmp, 1);
+        cublasSaxpy(cublasH, size, &mu_inv, d_Y, 1, d_tmp, 1);
 
-    // Clean up GPU memory
-    CUDA_CHECK(cudaFree(d_data));
+        // Shrinkage (GPU)
+        shrink_on_gpu(d_tmp, mu_inv * lambda, size);
+        cudaMemcpy(d_S, d_tmp, size * sizeof(float), cudaMemcpyDeviceToDevice);
+
+        // Y = Y + mu*(D-L-S)
+        cublasScopy(cublasH, size, d_D, 1, d_tmp, 1);
+        cublasSaxpy(cublasH, size, &alpha2, d_L, 1, d_tmp, 1);
+        cublasSaxpy(cublasH, size, &alpha2, d_S, 1, d_tmp, 1);
+        cublasSaxpy(cublasH, size, &mu, d_tmp, 1, d_Y, 1);
+
+        // Compute error on CPU
+        cudaMemcpy(h_err.data(), d_tmp, size * sizeof(float), cudaMemcpyDeviceToHost);
+        float sum_err = 0.0f;
+        for (float v : h_err) sum_err += v * v;
+        err = std::sqrt(sum_err);
+        iter++;
+        if (iter == 1 || iter % 100 == 0 || err < tol)
+            std::cout << "Iter: " << iter << ", Error: " << err << std::endl;
+    }
+    auto t_rpca2 = high_resolution_clock::now();
+
+    // 6. Copy results back and save
+    auto t_res1 = high_resolution_clock::now();
+    std::vector<float> h_S(size), h_L(size);
+    cudaMemcpy(h_S.data(), d_S, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_L.data(), d_L, size * sizeof(float), cudaMemcpyDeviceToHost);
+
+    cv::Mat foreground(rows, cols, CV_32FC1, h_S.data());
+    cv::Mat background(rows, cols, CV_32FC1, h_L.data());
+    cv::Mat fg8, bg8;
+    foreground.convertTo(fg8, CV_8UC1, 1, 0);
+    background.convertTo(bg8, CV_8UC1, 1, 0);
+
+    cv::imwrite("gpu_cusolver_foreground.png", fg8);
+    cv::imwrite("gpu_cusolver_background.png", bg8);
+    auto t_res2 = high_resolution_clock::now();
+
+    // 7. Profiling
+    std::cout << "Profiling (milliseconds):\n";
+    std::cout << "Load image: " << duration_cast<milliseconds>(t_load2 - t_load1).count() << " ms\n";
+    std::cout << "To device: " << duration_cast<milliseconds>(t_eigen2 - t_eigen1).count() << " ms\n";
+    std::cout << "RPCA fit: " << duration_cast<milliseconds>(t_rpca2 - t_rpca1).count() << " ms\n";
+    std::cout << "Save images: " << duration_cast<milliseconds>(t_res2 - t_res1).count() << " ms\n";
+    std::cout << "DONE.\n";
+
+    // Free
+    cublasDestroy(cublasH);
+    cusolverDnDestroy(cusolverH);
+    cudaFree(d_D); cudaFree(d_S); cudaFree(d_Y); cudaFree(d_L); cudaFree(d_tmp);
 
     return 0;
 }
