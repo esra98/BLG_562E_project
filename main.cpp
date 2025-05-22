@@ -102,11 +102,10 @@ cv::Mat image_from_mat(const Eigen::MatrixXd& mat) {
 
 int main() {
     using namespace std::chrono;
-    std::cout << "Profiling started...\n";
 
     // load image
     auto timer_1 = high_resolution_clock::now();
-    cv::Mat img = cv::imread("lenna(1).png", cv::IMREAD_GRAYSCALE);
+    cv::Mat img = cv::imread("lenna_64x64.png", cv::IMREAD_GRAYSCALE);
     auto timer_2 = high_resolution_clock::now();
     if (img.empty()) {
         std::cerr << "Error: Could not load image." << std::endl;
