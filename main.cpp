@@ -3,19 +3,18 @@
 #include <opencv4/opencv2/opencv.hpp>
 #include <cmath>
 #include <algorithm>
-#include <chrono> // For profiling
+#include <chrono> 
 
-// Function for RPCA (from the previous implementation)
 class R_pca {
 public:
-    Eigen::MatrixXd D;  // Data matrix (image)
-    Eigen::MatrixXd S;  // Sparse component (foreground)
-    Eigen::MatrixXd Y;  // Lagrange multiplier
+    /// parameter names are the same as in the original code, see the original.py
+    Eigen::MatrixXd D;  // image data matrix
+    Eigen::MatrixXd S;  // Sparse data matrix
+    Eigen::MatrixXd Y;  // lagrangemultiplier
     double mu;
     double mu_inv;
     double lmbda;
 
-    // Constructor
     R_pca(const Eigen::MatrixXd& D, double mu = -1, double lmbda = -1) 
         : D(D), S(D.rows(), D.cols()), Y(D.rows(), D.cols()) {
         if (mu > 0) {
@@ -51,7 +50,6 @@ public:
         return U * singular_values.asDiagonal() * V.transpose();
     }
 
-    // Fit function for principal component pursuit
     void fit(double tol = 1E-7, int max_iter = 1000, int iter_print = 100) {
         int iter = 0;
         double err = std::numeric_limits<double>::infinity();
@@ -104,50 +102,49 @@ cv::Mat image_from_mat(const Eigen::MatrixXd& mat) {
 
 int main() {
     using namespace std::chrono;
-    std::cout << "Profiling steps...\n";
+    std::cout << "Profiling started...\n";
 
-    // 1. Load the image
-    auto t_load1 = high_resolution_clock::now();
+    // load image
+    auto timer_1 = high_resolution_clock::now();
     cv::Mat img = cv::imread("lenna(1).png", cv::IMREAD_GRAYSCALE);
-    auto t_load2 = high_resolution_clock::now();
+    auto timer_2 = high_resolution_clock::now();
     if (img.empty()) {
         std::cerr << "Error: Could not load image." << std::endl;
         return -1;
     }
 
-    // 2. Convert to Eigen matrix
-    auto t_eigen1 = high_resolution_clock::now();
+    // Convert to Eigen matrix using Eigen library
+    auto timer_3 = high_resolution_clock::now();
     Eigen::MatrixXd D = mat_from_image(img);
-    auto t_eigen2 = high_resolution_clock::now();
+    auto timer_4 = high_resolution_clock::now();
 
-    // 3. Initialize and run RPCA
-    auto t_rpca1 = high_resolution_clock::now();
+    //  Initialize RPCA class object for specific data
+    auto timer_5 = high_resolution_clock::now();
     R_pca rpca(D);
     rpca.fit();
-    auto t_rpca2 = high_resolution_clock::now();
+    auto timer_6 = high_resolution_clock::now();
 
-    // 4. Get results and convert back to cv::Mat
-    auto t_res1 = high_resolution_clock::now();
+    // use opencv to convert the sparse and low-rank matrices back to images
+    auto timer_7 = high_resolution_clock::now();
     Eigen::MatrixXd S = rpca.get_sparse_matrix();
     Eigen::MatrixXd L = rpca.get_low_rank_matrix();
     cv::Mat foreground = image_from_mat(S);
     cv::Mat background = image_from_mat(L);
-    auto t_res2 = high_resolution_clock::now();
+    auto timer_8 = high_resolution_clock::now();
 
-    // 5. Save results
-    auto t_save1 = high_resolution_clock::now();
+    // Save images created by opencv using results from RPCA
+    auto timer_9 = high_resolution_clock::now();
     cv::imwrite("cpu_results_foreground.png", foreground);
     cv::imwrite("cpu_results_background.png", background);
-    auto t_save2 = high_resolution_clock::now();
+    auto timer_10 = high_resolution_clock::now();
 
-    // Profiling output
-    std::cout << "Profiling (milliseconds):\n";
-    std::cout << "Load image: " << duration_cast<milliseconds>(t_load2 - t_load1).count() << " ms\n";
-    std::cout << "Convert to Eigen: " << duration_cast<milliseconds>(t_eigen2 - t_eigen1).count() << " ms\n";
-    std::cout << "RPCA fit: " << duration_cast<milliseconds>(t_rpca2 - t_rpca1).count() << " ms\n";
-    std::cout << "Convert/Prepare results: " << duration_cast<milliseconds>(t_res2 - t_res1).count() << " ms\n";
-    std::cout << "Save images: " << duration_cast<milliseconds>(t_save2 - t_save1).count() << " ms\n";
-    std::cout << "DONE.\n";
+    // Profiling 
+    std::cout << "Load image: " << duration_cast<milliseconds>(timer_2 - timer_1).count() << " ms\n";
+    std::cout << "Convert to Eigen: " << duration_cast<milliseconds>(timer_4 - timer_3).count() << " ms\n";
+    std::cout << "RPCA init: " << duration_cast<milliseconds>(timer_6 - timer_5).count() << " ms\n";
+    std::cout << "result image creation: " << duration_cast<milliseconds>(timer_8 - timer_7).count() << " ms\n";
+    std::cout << "Save images: " << duration_cast<milliseconds>(timer_10 - timer_9).count() << " ms\n";
+    std::cout << "Total time: " << duration_cast<milliseconds>(timer_10 - timer_1).count() << " ms\n";
 
     return 0;
 }
