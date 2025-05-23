@@ -1,0 +1,119 @@
+Processing size: 128x128
+Iteration: 1, Error: 28.8922
+Iteration: 100, Error: 0.113897
+Iteration: 200, Error: 0.0364122
+Iteration: 300, Error: 0.0128558
+Iteration: 400, Error: 0.00540908
+Iteration: 500, Error: 0.00274507
+Iteration: 600, Error: 0.00139526
+Iteration: 700, Error: 0.000739628
+Iteration: 800, Error: 0.000389204
+Iteration: 900, Error: 0.000214505
+Iteration: 1000, Error: 0.00011953
+Load image: 1 ms
+Convert to Eigen: 0 ms
+RPCA init: 0 ms
+result image creation: 419213 ms
+Save images: 2 ms
+Total time: 488934 ms
+
+Processing size: 256x256
+Iteration: 1, Error: 22.6846
+Iteration: 100, Error: 0.0341194
+Iteration: 200, Error: 0.0133594
+Iteration: 300, Error: 0.00699901
+Iteration: 400, Error: 0.00465025
+^C
+(base) esra@ESRA:~/Desktop/Project$ g++ main.cpp -o main `pkg-config opencv4 --cflags --libs` && ./main
+
+Processing size: 64x64
+Iteration: 1, Error: 46.1969
+Iteration: 100, Error: 0.311224
+Iteration: 200, Error: 0.0584228
+Iteration: 300, Error: 0.0174899
+Load image: 4 ms
+Convert to Eigen: 0 ms
+RPCA init: 0 ms
+result image creation: 19061 ms
+Save images: 0 ms
+Total time: 19067 ms
+
+Processing size: 128x128
+Iteration: 1, Error: 31.6879
+Iteration: 100, Error: 0.451931
+Iteration: 200, Error: 0.12336
+Iteration: 300, Error: 0.0520431
+Load image: 4 ms
+Convert to Eigen: 0 ms
+RPCA init: 0 ms
+result image creation: 121053 ms
+Save images: 2 ms
+Total time: 140124 ms
+
+Processing size: 256x256
+Iteration: 1, Error: 22.6928
+Iteration: 100, Error: 0.326343
+Iteration: 200, Error: 0.154523
+^C
+(base) esra@ESRA:~/Desktop/Project$ g++ -pg main.cpp -o main `pkg-config opencv4 --cflags --libs` && ./main
+main.cpp: In function ‘int main()’:
+main.cpp:107:33: error: expected ‘}’ before ‘;’ token
+  107 |     std::vector<int> sizes = {64;
+      |                              ~  ^
+(base) esra@ESRA:~/Desktop/Project$ g++ -pg main.cpp -o main `pkg-config opencv4 --cflags --libs` && ./main
+main.cpp: In function ‘int main()’:
+main.cpp:109:5: error: expected ‘,’ or ‘;’ before ‘auto’
+  109 |     auto timer_1 = high_resolution_clock::now();
+      |     ^~~~
+main.cpp:150:78: error: ‘timer_1’ was not declared in this scope; did you mean ‘timer_12’?
+  150 |         std::cout << "Load image: " << duration_cast<milliseconds>(timer_2 - timer_1).count() << " ms\n";
+      |                                                                              ^~~~~~~
+      |                                                                              timer_12
+main.cpp:158:85: error: ‘timer_1’ was not declared in this scope; did you mean ‘timer_2’?
+  158 |     std::cout << "\nLoad original image: " << duration_cast<milliseconds>(timer_2 - timer_1).count() << " ms\n";
+      |                                                                                     ^~~~~~~
+      |                                                                                     timer_2
+(base) esra@ESRA:~/Desktop/Project$ g++ -pg main.cpp -o main `pkg-config opencv4 --cflags --libs` && ./main
+
+Processing size: 64x64
+Iteration: 1, Error: 46.1969
+Iteration: 100, Error: 0.311224
+Iteration: 200, Error: 0.0584228
+Iteration: 300, Error: 0.0174899
+Load image: 5 ms
+Convert to Eigen: 0 ms
+RPCA init: 1 ms
+result image creation: 90481 ms
+Save images: 2 ms
+Total time: 90490 ms
+
+Load original image: 5 ms
+COMPLETED
+(base) esra@ESRA:~/Desktop/Project$ g++ -pg main.cpp -o main `pkg-config opencv4 --cflags --libs` && ./main
+
+Processing size: 64x64
+Iteration: 1, Error: 46.1969
+Iteration: 100, Error: 0.311224
+Iteration: 200, Error: 0.0584228
+Iteration: 300, Error: 0.0174899
+Load image: 5 ms
+Convert to Eigen: 0 ms
+RPCA init: 1 ms
+result image creation: 92402 ms
+Save images: 2 ms
+Total time: 92412 ms
+
+Processing size: 128x128
+Iteration: 1, Error: 31.6879
+Iteration: 100, Error: 0.451931
+Iteration: 200, Error: 0.12336
+Iteration: 300, Error: 0.0520431
+Load image: 5 ms
+Convert to Eigen: 0 ms
+RPCA init: 5 ms
+result image creation: 557873 ms
+Save images: 12 ms
+Total time: 650303 ms
+
+Processing size: 256x256
+Iteration: 1, Error: 22.6928
