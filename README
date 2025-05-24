@@ -1,3 +1,5 @@
+Commands to run it
+
 g++ original.cpp -o original `pkg-config opencv4 --cflags --libs` && ./original^C
 
 nvcc -arch=sm_75 original_cuda.cu -o original_cuda `pkg-config opencv4 --cflags --libs` -lcuda -lcublas -lcusolver -w  && ./original_cuda

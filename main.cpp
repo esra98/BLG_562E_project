@@ -148,11 +148,12 @@ int main() {
         auto timer_12 = high_resolution_clock::now();
 
         std::cout << "Load image: " << duration_cast<milliseconds>(timer_2 - timer_1).count() << " ms\n";
-        std::cout << "Convert to Eigen: " << duration_cast<milliseconds>(timer_4 - timer_3).count() << " ms\n";
-        std::cout << "RPCA init: " << duration_cast<milliseconds>(timer_6 - timer_5).count() << " ms\n";
-        std::cout << "result image creation: " << duration_cast<milliseconds>(timer_8 - timer_7).count() << " ms\n";
-        std::cout << "Save images: " << duration_cast<milliseconds>(timer_10 - timer_9).count() << " ms\n";
-        std::cout << "Total time: " << duration_cast<milliseconds>(timer_10 - timer_1).count() << " ms\n";
+        std::cout << "Resize image: " << duration_cast<milliseconds>(timer_4 - timer_3).count() << " ms\n";
+        std::cout << "Convert to Eigen matrix: " << duration_cast<milliseconds>(timer_6 - timer_5).count() << " ms\n";
+        std::cout << "RPCA fit time: " << duration_cast<milliseconds>(timer_8 - timer_7).count() << " ms\n";
+        std::cout << "Create result images: " << duration_cast<milliseconds>(timer_10 - timer_9).count() << " ms\n";
+        std::cout << "Save images: " << duration_cast<milliseconds>(timer_12 - timer_11).count() << " ms\n";
+        std::cout << "Total time for size " << sz << ": " << duration_cast<milliseconds>(timer_12 - timer_3).count() << " ms\n";
     }
 
     std::cout << "\nLoad original image: " << duration_cast<milliseconds>(timer_2 - timer_1).count() << " ms\n";
