@@ -1,8 +1,13 @@
-# My Image Gallery
+# C++ Code Outputs
 
-<p float="left">
-  <img src="./lenna_512x512_foreground_100_iteration64.png" width="%100" />
-  <img src="./lenna_512x512_foreground_100_iteration128.png" width="%100" /> 
-  <img src="./lenna_512x512_foreground_100_iteration256.png" width="%100" />
-  <img src="./lenna_512x512_foreground_100_iteration512.png" width="%100" />
-</p>
+### Foreground image at 64x64 pixels  
+![64 iteration](./lenna_512x512_foreground_100_iteration64.png)
+
+### Foreground image at 128x128 pixels   
+![128 iteration](./lenna_512x512_foreground_100_iteration128.png)
+
+### Foreground image at 256x256 pixels   
+![256 iteration](./lenna_512x512_foreground_100_iteration256.png)
+
+### Foreground image at 512x512 pixels   
+![512 iteration](./lenna_512x512_foreground_100_iteration512.png)
