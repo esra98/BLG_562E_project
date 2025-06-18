@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Image Gallery</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+  }
+  .gallery {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+  .gallery img {
+    max-width: 200px;
+    height: auto;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+  <h1>My 4 Images</h1>
+  <div class="gallery">
+    <img src="./lenna_512x512_foreground_100_iteration64.png" alt="Image 1" />
+    <img src="./lenna_512x512_foreground_100_iteration128.png" alt="Image 2" />
+    <img src="./lenna_512x512_foreground_100_iteration256.png" alt="Image 3" />
+    <img src="./lenna_512x512_foreground_100_iteration512.png" alt="Image 4" />
+  </div>
+</body>
+</html>
